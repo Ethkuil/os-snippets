@@ -14,7 +14,7 @@ $networkAdapter = Get-NetAdapter | Where-Object { $_.Name -eq $networkAdapterNam
 if ($networkAdapter) {
     # Disable the network adapter
     $networkAdapter | Enable-NetAdapter -Confirm:$false
-    Write-Host "Network disabled."
+    Write-Host "Network enabled."
 } else {
     Write-Host "Wi-Fi adapter '$networkAdapterName' not found."
 }
