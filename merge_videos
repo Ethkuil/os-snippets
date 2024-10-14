@@ -3,6 +3,6 @@
 output_file="$1"
 shift 1
 input_files=("$@")
-rm list.txt
 for f in "${input_files[@]}"; do echo "file '$f'" >>list.txt; done
-ffmpeg -safe 0 -f concat -i list.txt -c copy "$(sed 's/ /_/g' <<<"$output_file")"
+ffmpeg -safe 0 -f concat -i list.txt -c copy "$(tr -s ' ' '_' <<<"$output_file")"
+rm list.txt
