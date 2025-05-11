@@ -58,7 +58,7 @@ def sanitize_filename(filename: str) -> str:
     filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
     return filename.strip('. ')
 
-def extract_track(flac_file: str, track: Track, size_threshold: float):
+def extract_track(flac_file: str, track: Track, size_threshold: float = float('inf')):
     """Extract a single track from the FLAC file"""
     output_name = f"{track.number:02d}. {sanitize_filename(track.title)}"
     temp_flac = f"{output_name}.flac"
@@ -97,19 +97,27 @@ def process_tracks(flac_file: str, tracks: List[Track], size_threshold: float):
         final_output = extract_track(flac_file, track, size_threshold)
         print(f"Created: {final_output}\n")
 
-def main():
-    parser = argparse.ArgumentParser(description='Extract tracks from a CUE file and convert to AAC if size exceeds threshold.')
-    parser.add_argument('cue_file', help='Path to the CUE file')
-    parser.add_argument('--size-threshold', '-s', type=float, default=float('inf'),
-                       help='Size threshold in MB. Files larger than this will be converted to 256k AAC  (default: no conversion)')
+def parse_args():
+    parser = argparse.ArgumentParser(description='Extract tracks from CUE files and convert to AAC if size exceeds threshold.')
+    parser.add_argument('cue_files', nargs='+', help='Path to one or more CUE files')
+    parser.add_argument('--size-threshold', '-s', '-t', type=float, default=float('inf'),
+                       help='Size threshold in MB. Files larger than this will be converted to 256k AAC (default: no conversion)')
     
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    with open(args.cue_file, 'r', encoding='utf-8') as f:
+def process_cue_file(cue_file, size_threshold):
+    with open(cue_file, 'r', encoding='utf-8') as f:
         cue_content = f.read()
     
     flac_file, tracks = parse_cue(cue_content)
-    process_tracks(flac_file, tracks, size_threshold=args.size_threshold)
+    process_tracks(flac_file, tracks, size_threshold=size_threshold)
+
+def main():
+    args = parse_args()
+    
+    for cue_file in args.cue_files:
+        print(f"Processing {cue_file}...")
+        process_cue_file(cue_file, args.size_threshold)
 
 if __name__ == '__main__':
     main()
