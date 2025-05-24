@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+
+for f in "$@"; do ffmpeg -i "$f" -map 0:a -c:a aac -b:a 256k -f ipod "${f%.*}.m4a"; done
+
