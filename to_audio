@@ -1,0 +1,25 @@
+#!/bin/bash
+
+get_audio_extension() {
+  local video_file="$1"
+  local codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$video_file")
+  case "$codec" in
+    aac) echo "m4a";;
+    mp3) echo "mp3";;
+    flac) echo "flac";;
+    vorbis) echo "ogg";;
+    opus) echo "opus";;
+    ac3) echo "ac3";;
+    eac3) echo "eac3";;
+    *) echo "wav";;
+  esac
+}
+
+for video in "$@"; do
+  filename=$(basename -- "$video")
+  basename="${filename%.*}"
+  ext=$(get_audio_extension "$video")
+  ffmpeg -i "$video" -vn -c:a copy "$basename.$ext" &
+done
+wait
+
