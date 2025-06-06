@@ -4,7 +4,12 @@ import os
 import re
 import argparse
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
+
+@dataclass
+class Album:
+    title: str = ""
+    performer: str = ""
 
 @dataclass
 class Track:
@@ -13,6 +18,7 @@ class Track:
     performer: str
     start_time: str
     end_time: str = None
+    album: Optional[Album] = None
 
 def parse_time(timestamp: str) -> str:
     """Convert CUE time format (MM:SS:FF) to ffmpeg time format (HH:MM:SS.ms)"""
@@ -26,6 +32,7 @@ def parse_cue(cue_content: str) -> tuple[str, List[Track]]:
     """Parse CUE file content and return FLAC filename and track information"""
     lines = cue_content.splitlines()
     flac_file = None
+    album = Album()
     tracks = []
     current_track = None
     
@@ -33,18 +40,21 @@ def parse_cue(cue_content: str) -> tuple[str, List[Track]]:
         line = line.strip('\n')
         if line.startswith('FILE '):
             flac_file = line.split('"')[1]
+        elif line.startswith('TITLE '):
+            album.title = line.split('"')[1]
+        elif line.startswith('PERFORMER '):
+            album.performer = line.split('"')[1]
         elif line.startswith('  TRACK '):
             if current_track:
                 tracks.append(current_track)
             track_num = int(line.split()[1])
-            current_track = Track(number=track_num, title="", performer="", start_time="")
+            current_track = Track(number=track_num, title="", performer="", start_time="", album=album)
         elif line.startswith('    TITLE '):
             current_track.title = line.split('"')[1]
         elif line.startswith('    PERFORMER '):
             current_track.performer = line.split('"')[1]
         elif line.startswith('    INDEX 01 '):
             current_track.start_time = parse_time(line.split()[-1])
-    
     if current_track:
         tracks.append(current_track)
     
@@ -73,6 +83,8 @@ def extract_track(flac_file: str, track: Track, size_threshold: float = float('i
         '-metadata', f'title={track.title}',
         '-metadata', f'artist={track.performer}',
         '-metadata', f'track={track.number}',
+        '-metadata', f'album={track.album.title}',
+        '-metadata', f'album_artist={track.album.performer}',
         '-c:a', 'flac'
     ])
     cmd.append(temp_flac)
