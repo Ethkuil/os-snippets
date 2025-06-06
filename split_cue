@@ -6,10 +6,12 @@ import argparse
 from dataclasses import dataclass
 from typing import List, Optional
 
+
 @dataclass
 class Album:
     title: str = ""
     performer: str = ""
+
 
 @dataclass
 class Track:
@@ -20,13 +22,15 @@ class Track:
     end_time: str = None
     album: Optional[Album] = None
 
+
 def parse_time(timestamp: str) -> str:
     """Convert CUE time format (MM:SS:FF) to ffmpeg time format (HH:MM:SS.ms)"""
     if not timestamp:
         return None
-    mm, ss, ff = map(int, timestamp.split(':'))
+    mm, ss, ff = map(int, timestamp.split(":"))
     ms = int(ff * 1000 / 75)
-    return f"{mm//60:02d}:{mm%60:02d}:{ss:02d}.{ms:03d}"
+    return f"{mm // 60:02d}:{mm % 60:02d}:{ss:02d}.{ms:03d}"
+
 
 def parse_cue(cue_content: str) -> tuple[str, List[Track]]:
     """Parse CUE file content and return FLAC filename and track information"""
@@ -35,58 +39,70 @@ def parse_cue(cue_content: str) -> tuple[str, List[Track]]:
     album = Album()
     tracks = []
     current_track = None
-    
+
     for line in lines:
-        line = line.strip('\n')
-        if line.startswith('FILE '):
+        line = line.strip("\n")
+        if line.startswith("FILE "):
             flac_file = line.split('"')[1]
-        elif line.startswith('TITLE '):
+        elif line.startswith("TITLE "):
             album.title = line.split('"')[1]
-        elif line.startswith('PERFORMER '):
+        elif line.startswith("PERFORMER "):
             album.performer = line.split('"')[1]
-        elif line.startswith('  TRACK '):
+        elif line.startswith("  TRACK "):
             if current_track:
                 tracks.append(current_track)
             track_num = int(line.split()[1])
-            current_track = Track(number=track_num, title="", performer="", start_time="", album=album)
-        elif line.startswith('    TITLE '):
+            current_track = Track(
+                number=track_num, title="", performer="", start_time="", album=album
+            )
+        elif line.startswith("    TITLE "):
             current_track.title = line.split('"')[1]
-        elif line.startswith('    PERFORMER '):
+        elif line.startswith("    PERFORMER "):
             current_track.performer = line.split('"')[1]
-        elif line.startswith('    INDEX 01 '):
+        elif line.startswith("    INDEX 01 "):
             current_track.start_time = parse_time(line.split()[-1])
     if current_track:
         tracks.append(current_track)
-    
-    for i in range(len(tracks)-1):
-        tracks[i].end_time = tracks[i+1].start_time
-    
+
+    for i in range(len(tracks) - 1):
+        tracks[i].end_time = tracks[i + 1].start_time
+
     return flac_file, tracks
+
 
 def sanitize_filename(filename: str) -> str:
     """Make filename safe for all platforms"""
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    return filename.strip('. ')
+    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    return filename.strip(". ")
 
-def extract_track(flac_file: str, track: Track, size_threshold: float = float('inf')):
+
+def extract_track(flac_file: str, track: Track, size_threshold: float = float("inf")):
     """Extract a single track from the FLAC file"""
     output_name = f"{track.number:02d}. {sanitize_filename(track.title)}"
     temp_flac = f"{output_name}.flac"
 
-    cmd = ['ffmpeg', '-i', flac_file]
+    cmd = ["ffmpeg", "-i", flac_file]
     if track.start_time:
-        cmd.extend(['-ss', track.start_time])
+        cmd.extend(["-ss", track.start_time])
     if track.end_time:
-        cmd.extend(['-to', track.end_time])
-    
-    cmd.extend([
-        '-metadata', f'title={track.title}',
-        '-metadata', f'artist={track.performer}',
-        '-metadata', f'track={track.number}',
-        '-metadata', f'album={track.album.title}',
-        '-metadata', f'album_artist={track.album.performer}',
-        '-c:a', 'flac'
-    ])
+        cmd.extend(["-to", track.end_time])
+
+    cmd.extend(
+        [
+            "-metadata",
+            f"title={track.title}",
+            "-metadata",
+            f"artist={track.performer}",
+            "-metadata",
+            f"track={track.number}",
+            "-metadata",
+            f"album={track.album.title}",
+            "-metadata",
+            f"album_artist={track.album.performer}",
+            "-c:a",
+            "flac",
+        ]
+    )
     cmd.append(temp_flac)
 
     subprocess.run(cmd, check=True)
@@ -95,12 +111,24 @@ def extract_track(flac_file: str, track: Track, size_threshold: float = float('i
     size_mb = os.path.getsize(temp_flac) / (1024 * 1024)
     if size_mb > size_threshold:
         output_aac = f"{output_name}.m4a"
-        cmd = ['ffmpeg', '-i', temp_flac, '-c:a', 'aac', '-b:a', '256k', '-f', 'ipod', output_aac]
+        cmd = [
+            "ffmpeg",
+            "-i",
+            temp_flac,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "256k",
+            "-f",
+            "ipod",
+            output_aac,
+        ]
         subprocess.run(cmd, check=True)
         os.remove(temp_flac)
         return output_aac
-    
+
     return temp_flac
+
 
 def process_tracks(flac_file: str, tracks: List[Track], size_threshold: float):
     """Process and extract all tracks"""
@@ -109,27 +137,39 @@ def process_tracks(flac_file: str, tracks: List[Track], size_threshold: float):
         final_output = extract_track(flac_file, track, size_threshold)
         print(f"Created: {final_output}\n")
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='Extract tracks from CUE files and convert to AAC if size exceeds threshold.')
-    parser.add_argument('cue_files', nargs='+', help='Path to one or more CUE files')
-    parser.add_argument('--size-threshold', '-s', '-t', type=float, default=float('inf'),
-                       help='Size threshold in MB. Files larger than this will be converted to 256k AAC (default: no conversion)')
-    
+    parser = argparse.ArgumentParser(
+        description="Extract tracks from CUE files and convert to AAC if size exceeds threshold."
+    )
+    parser.add_argument("cue_files", nargs="+", help="Path to one or more CUE files")
+    parser.add_argument(
+        "--size-threshold",
+        "-s",
+        "-t",
+        type=float,
+        default=float("inf"),
+        help="Size threshold in MB. Files larger than this will be converted to 256k AAC (default: no conversion)",
+    )
+
     return parser.parse_args()
 
+
 def process_cue_file(cue_file, size_threshold):
-    with open(cue_file, 'r', encoding='utf-8') as f:
+    with open(cue_file, "r", encoding="utf-8") as f:
         cue_content = f.read()
-    
+
     flac_file, tracks = parse_cue(cue_content)
     process_tracks(flac_file, tracks, size_threshold=size_threshold)
 
+
 def main():
     args = parse_args()
-    
+
     for cue_file in args.cue_files:
         print(f"Processing {cue_file}...")
         process_cue_file(cue_file, args.size_threshold)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
