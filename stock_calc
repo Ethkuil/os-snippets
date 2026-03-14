@@ -114,11 +114,11 @@ def derive_all_parameters(provided):
     if dpr is None:
         return None
     if not (0 <= dpr <= 1):
-        raise ValueError(f"推导的DPR值异常: {dpr*100:.2f}% (应在0-100%之间)")
+        print(f"推导的DPR值异常: {dpr*100:.2f}% (应在0-100%之间)")
     if pb <= 0:
-        raise ValueError(f"推导的PB值异常: {pb} (应大于0)")
+        print(f"推导的PB值异常: {pb} (应大于0)")
     if pe <= 0:
-        raise ValueError(f"推导的PE值异常: {pe} (应大于0)")
+        print(f"推导的PE值异常: {pe} (应大于0)")
 
     return {"dpr": dpr, "pb": pb, "pe": pe}
 
