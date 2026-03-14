@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+
+import argparse
+
+
+def calculate_from_dpr_pb_pe(dpr, pb, pe):
+    """
+    从分红率(DPR)、PB、PE计算
+
+    Args:
+        dpr: 分红率 (0-1)
+        pb: 市净率
+        pe: 市盈率
+
+    Returns:
+        (总和, 股息率, 净利润增长率)
+    """
+    dividend_yield = dpr / pe
+    net_profit_growth = (1 - dpr) * pb / pe
+    total = dividend_yield + net_profit_growth
+
+    return total, dividend_yield, net_profit_growth
+
+
+def derive_all_parameters(provided):
+    """
+    根据提供的参数推导 DPR, PB, PE
+
+    Args:
+        provided: dict 包含已提供的参数（百分比已转为小数）
+
+    Returns:
+        dict 包含 {dpr, pb, pe} 或 None
+
+    Raises:
+        ValueError: 如果参数不足或推导失败
+    """
+    dpr, pb, pe = None, None, None
+
+    # 场景1: DPR + PB + PE（直接返回）
+    if all(x in provided for x in ["dpr", "pb", "pe"]):
+        return {"dpr": provided["dpr"], "pb": provided["pb"], "pe": provided["pe"]}
+
+    # 场景2: ROE + PB + PE → 推导DPR
+    # ROE = PB / PE
+    # DPR = (PB - PE * ROE) / (PB * (1 - PE * ROE / PB))
+    elif all(x in provided for x in ["roe", "pb", "pe"]):
+        roe, pb, pe = provided["roe"], provided["pb"], provided["pe"]
+        # 从 ROE = PB/PE 反推 DPR
+        dpr = (pb - pe * roe) / (pb * (1 - pe * roe / pb))
+
+    # 场景3: DPR + ROE + PB → 推导PE = PB/ROE
+    elif all(x in provided for x in ["dpr", "roe", "pb"]):
+        dpr, roe, pb = provided["dpr"], provided["roe"], provided["pb"]
+        if roe <= 0:
+            raise ValueError("ROE必须大于0")
+        pe = pb / roe
+
+    # 场景4: DY + PE + PB → 推导DPR = DY * PE
+    elif all(x in provided for x in ["dy", "pe", "pb"]):
+        dy, pe, pb = provided["dy"], provided["pe"], provided["pb"]
+        dpr = dy * pe
+
+    # 场景5: DY + DPR + PB → 推导PE = DY / DPR
+    elif all(x in provided for x in ["dy", "dpr", "pb"]):
+        dy, dpr, pb = provided["dy"], provided["dpr"], provided["pb"]
+        if dpr <= 0:
+            raise ValueError("DPR必须大于0")
+        pe = dy / dpr
+
+    # 场景6: DY + DPR + PE → 推导PB = sqrt(DY * PE / DPR)
+    elif all(x in provided for x in ["dy", "dpr", "pe"]):
+        dy, dpr, pe = provided["dy"], provided["dpr"], provided["pe"]
+        if dpr <= 0:
+            raise ValueError("DPR必须大于0")
+        pb_squared = dy * pe / dpr
+        if pb_squared < 0:
+            raise ValueError("参数组合导致PB计算为负数")
+        pb = pb_squared ** 0.5
+
+    # 场景7: DY + ROE + PB → 推导DPR和PE
+    elif all(x in provided for x in ["dy", "roe", "pb"]):
+        dy, roe, pb = provided["dy"], provided["roe"], provided["pb"]
+        if roe <= 0:
+            raise ValueError("ROE必须大于0")
+        dpr = dy / (roe * pb)
+        pe = pb / roe
+
+    # 场景8: DY + ROE + PE → 推导PB和DPR
+    elif all(x in provided for x in ["dy", "roe", "pe"]):
+        dy, roe, pe = provided["dy"], provided["roe"], provided["pe"]
+        if roe <= 0:
+            raise ValueError("ROE必须大于0")
+        pb = roe * pe
+        dpr = dy / (roe * pb)
+
+    # 场景9: DY + DPR + ROE → 推导PB和PE
+    elif all(x in provided for x in ["dy", "dpr", "roe"]):
+        dy, dpr, roe = provided["dy"], provided["dpr"], provided["roe"]
+        if dpr <= 0 or roe <= 0:
+            raise ValueError("DPR和ROE必须大于0")
+        pb = dy / (dpr * roe)
+        pe = pb / roe
+
+    # 场景10: PE + ROE + DPR → 推导PB = ROE * PE
+    elif all(x in provided for x in ["pe", "roe", "dpr"]):
+        dpr, roe, pe = provided["dpr"], provided["roe"], provided["pe"]
+        pb = roe * pe
+
+    else:
+        return None
+
+    # 验证推导结果的合理性
+    if dpr is None:
+        return None
+    if not (0 <= dpr <= 1):
+        raise ValueError(f"推导的DPR值异常: {dpr*100:.2f}% (应在0-100%之间)")
+    if pb <= 0:
+        raise ValueError(f"推导的PB值异常: {pb} (应大于0)")
+    if pe <= 0:
+        raise ValueError(f"推导的PE值异常: {pe} (应大于0)")
+
+    return {"dpr": dpr, "pb": pb, "pe": pe}
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="股票年化收益率计算器",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s -d 40 -p 2 -e 10      # DPR, PB, PE
+  %(prog)s -r 15 -p 2 -e 10      # ROE, PB, PE
+  %(prog)s -d 40 -r 15 -p 2      # DPR, ROE, PB
+  %(prog)s -y 7.58 -p 0.94 -e 6.7  # DY, PB, PE (用户测试用例)
+        """,
+    )
+
+    parser.add_argument("-d", "--dpr", type=float, help="分红率 (%%)")
+    parser.add_argument("-y", "--dy", type=float, help="股息率 (%%)")
+    parser.add_argument("-r", "--roe", type=float, help="净资产收益率 (ROE, %%)")
+    parser.add_argument("-p", "--pb", type=float, help="市净率 (PB)")
+    parser.add_argument("-e", "--pe", type=float, help="市盈率 (PE)")
+
+    args = parser.parse_args()
+
+    # 收集已提供的参数，百分比转为小数
+    provided = {}
+    for k, v in vars(args).items():
+        if v is not None:
+            if k in ["dpr", "dy", "roe"]:
+                provided[k] = v / 100
+            else:
+                provided[k] = v
+
+    # 参数验证
+    if len(provided) < 3:
+        parser.error(f"需要至少3个参数，只提供了{len(provided)}个")
+
+    # 统一推导
+    try:
+        params = derive_all_parameters(provided)
+    except ValueError as e:
+        parser.error(str(e))
+
+    if params is None:
+        parser.error(
+            "不支持的参数组合。可选组合:\n"
+            "  DPR + PB + PE\n"
+            "  ROE + PB + PE\n"
+            "  DPR + ROE + PB\n"
+            "  DY + PB + PE\n"
+            "  DY + DPR + PB\n"
+            "  DY + DPR + PE\n"
+            "  DY + ROE + PB\n"
+            "  DY + ROE + PE\n"
+            "  DY + DPR + ROE\n"
+            "  PE + ROE + DPR"
+        )
+
+    # 核心计算
+    total, dividend_yield, net_profit_growth = calculate_from_dpr_pb_pe(
+        params["dpr"], params["pb"], params["pe"]
+    )
+
+    # 输出结果
+    print("=" * 50)
+    print("计算结果:")
+    print("=" * 50)
+    print(f"  股息率:       {dividend_yield * 100:6.2f}%")
+    print(f"  净利润增长率: {net_profit_growth * 100:6.2f}%")
+    print("-" * 50)
+    print(f"  总和:         {total * 100:6.2f}%")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
