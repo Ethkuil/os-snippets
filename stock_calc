@@ -129,17 +129,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  %(prog)s -d 40 -p 2 -e 10      # DPR, PB, PE
-  %(prog)s -r 15 -p 2 -e 10      # ROE, PB, PE
-  %(prog)s -d 40 -r 15 -p 2      # DPR, ROE, PB
-  %(prog)s -y 7.58 -p 0.94 -e 6.7  # DY, PB, PE (用户测试用例)
+  %(prog)s -d 40 -b 2 -e 10      # DPR, PB, PE
+  %(prog)s -r 15 -b 2 -e 10      # ROE, PB, PE
+  %(prog)s -d 40 -r 15 -b 2      # DPR, ROE, PB
+  %(prog)s -y 7.58 -b 0.94 -e 6.7  # DY, PB, PE (用户测试用例)
         """,
     )
 
     parser.add_argument("-d", "--dpr", type=float, help="分红率 (%%)")
     parser.add_argument("-y", "--dy", type=float, help="股息率 (%%)")
     parser.add_argument("-r", "--roe", type=float, help="净资产收益率 (ROE, %%)")
-    parser.add_argument("-p", "--pb", type=float, help="市净率 (PB)")
+    parser.add_argument("-b", "--pb", type=float, help="市净率 (PB)")
     parser.add_argument("-e", "--pe", type=float, help="市盈率 (PE)")
 
     args = parser.parse_args()
