@@ -156,7 +156,7 @@ def parse_args():
 
 
 def process_cue_file(cue_file, size_threshold):
-    with open(cue_file, "r", encoding="utf-8") as f:
+    with open(cue_file, "r", encoding="utf-8-sig") as f:
         cue_content = f.read()
 
     flac_file, tracks = parse_cue(cue_content)
